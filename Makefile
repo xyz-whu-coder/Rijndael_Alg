@@ -1,17 +1,18 @@
 all: Rijndael
 
-CFLAGS := -O2 -Wall
+CFLAGS := -Ofast -Wall
+SOURCE_DIR := ./src
 
-Rijndael: main.o Rijndael.o
-	gcc $(CFLAGS) -o $@ main.o Rijndael.o
+Rijndael: $(SOURCE_DIR)/main.o $(SOURCE_DIR)/Rijndael.o
+	gcc $(CFLAGS) -o $@ $(SOURCE_DIR)/main.o $(SOURCE_DIR)/Rijndael.o
 
-main.o: main.c
-	gcc -c main.c
+main.o: $(SOURCE_DIR)/main.c
+	gcc -c $(SOURCE_DIR)/main.c
 
 Rijndael.o: Rijndael.c
-	gcc -c Rijndael.c
+	gcc -c $(SOURCE_DIR)/Rijndael.c
 
 clean:
-	rm -f Rijndael *.o
+	rm -f Rijndael ./**/*.o
 
 .PHONY: clean

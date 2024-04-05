@@ -8,16 +8,48 @@
  * This code is placed in the public domain.
  * Without any warranty of fitness for any purpose
  */
-#include "Rijndael.h"
+#include "../include/Rijndael.h"
+#include <time.h>
 
-int BC, KC, ROUNDS;
+extern int KC, BC, ROUNDS;
 
 int count = 0;
+double time_cost = 0.0;
+int method; // MUL_CAL | MUL_LUT
 
-word8 Galois_Field_256_multiply(
+/**
+ * multiply two elements of GF(256)
+ * by using Look-Up-Table
+ */
+word8 GF_256_mul_LUT(
     word8 left_value,
     word8 right_value)
 {
+    /**
+     * multiply two elements of GF(256)
+     * required for MixColumns and InvMixColumns
+     */
+    word8 result;
+    if (left_value && right_value)
+    {
+        result = Alogtable[(Logtable[left_value] + Logtable[right_value]) % 255];
+        count++;
+        return result;
+    }
+    result = 0;
+    count++;
+    return result;
+}
+
+/**
+ * multiply two elements of GF(256)
+ * by calculating directly
+ */
+word8 GF_256_mul_CAL(
+    word8 left_value,
+    word8 right_value)
+{
+
     /**
      * multiply two elements of GF(256)
      * required for MixColumns and InvMixColumns
@@ -48,8 +80,29 @@ word8 Galois_Field_256_multiply(
             right_value = right_value << 1; // right_value *= 2;
         }
     }
-    // printf("\n");
+
     count++;
+    return result;
+}
+
+/**
+ * choosing from two methods to
+ * multiply two elements of GF(256)
+ * and calculate time cost...
+ * difference between the time costs is currently negligible
+ */
+word8 GF_256_mul(
+    word8 left_value,
+    word8 right_value,
+    int method)
+{
+    clock_t start_time = clock();
+
+    word8 result = method == MUL_CAL ? GF_256_mul_CAL(left_value, right_value) : GF_256_mul_LUT(left_value, right_value);
+
+    clock_t end_time = clock();
+    time_cost += (double)(end_time - start_time) / CLOCKS_PER_SEC;
+
     return result;
 }
 
@@ -139,10 +192,10 @@ void MixColumns(word8 text[4][MAX_BLOCK_COUNT])
     {
         for (i = 0; i < 4; i++)
         {
-            b[i][j] = Galois_Field_256_multiply(2, text[i][j]) ^ // 0010
-                      Galois_Field_256_multiply(3, text[(i + 1) % 4][j]) ^ // 0011
-                      text[(i + 2) % 4][j] ^ 
-                      text[(i + 3) % 4][j]; 
+            b[i][j] = GF_256_mul(2, text[i][j], method) ^           // 0010
+                      GF_256_mul(3, text[(i + 1) % 4][j], method) ^ // 0011
+                      text[(i + 2) % 4][j] ^
+                      text[(i + 3) % 4][j];
         }
     }
     for (i = 0; i < 4; i++)
@@ -166,10 +219,10 @@ void InvMixColumns(word8 text[4][MAX_BLOCK_COUNT])
     {
         for (i = 0; i < 4; i++)
         {
-            b[i][j] = Galois_Field_256_multiply(0xe, text[i][j]) ^ // 1110
-                      Galois_Field_256_multiply(0xb, text[(i + 1) % 4][j]) ^ // 1011
-                      Galois_Field_256_multiply(0xd, text[(i + 2) % 4][j]) ^ // 1101
-                      Galois_Field_256_multiply(0x9, text[(i + 3) % 4][j]);  // 1001
+            b[i][j] = GF_256_mul(0xe, text[i][j], method) ^           // 1110
+                      GF_256_mul(0xb, text[(i + 1) % 4][j], method) ^ // 1011
+                      GF_256_mul(0xd, text[(i + 2) % 4][j], method) ^ // 1101
+                      GF_256_mul(0x9, text[(i + 3) % 4][j], method);  // 1001
         }
     }
     for (i = 0; i < 4; i++)
@@ -265,7 +318,7 @@ int KeyExpansion(
 }
 
 int Encrypt(
-    word8 text[4][MAX_BLOCK_COUNT], 
+    word8 text[4][MAX_BLOCK_COUNT],
     word8 round_key[MAX_ROUNDS + 1][4][MAX_BLOCK_COUNT])
 {
     /**
@@ -285,6 +338,8 @@ int Encrypt(
         ShiftRows(text, 0);
         MixColumns(text);
         AddRoundKey(text, round_key[r]);
+        // printf("Round %d:\n", r);
+        // print_text(text);
     }
     /**
      * Last round is special: there is no MixColumns
@@ -292,11 +347,13 @@ int Encrypt(
     SubBytes(text, S_Box);
     ShiftRows(text, 0);
     AddRoundKey(text, round_key[ROUNDS]);
+    // printf("Round %d:\n", ROUNDS);
+    // print_text(text);
     return 0;
 }
 
 int Decrypt(
-    word8 text[4][MAX_BLOCK_COUNT], 
+    word8 text[4][MAX_BLOCK_COUNT],
     word8 round_key[MAX_ROUNDS + 1][4][MAX_BLOCK_COUNT])
 {
     int r;
@@ -328,11 +385,32 @@ int Decrypt(
         InvMixColumns(text);
         SubBytes(text, S_Box_Inverse);
         ShiftRows(text, 1);
+        // printf("Round %d:\n", r);
+        // print_text(text);
     }
     /**
      * End with the extra key addition
      */
     AddRoundKey(text, round_key[0]);
+    // printf("Round %d:\n", r);
+    // print_text(text);
     return 0;
 }
 
+void print_text(word8 text[4][MAX_BLOCK_COUNT])
+{
+    int i, j;
+    for (j = 0; j < BC; j++)
+    {
+        for (i = 0; i < 4; i++)
+        {
+            printf("%02X ", text[i][j]);
+        }
+    }
+    printf("\n");
+}
+
+void test()
+{
+    return;
+}
